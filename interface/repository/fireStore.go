@@ -21,7 +21,7 @@ import (
 type FireStore struct {
 }
 
-func (f FireStore) GetUserData(emailE E.Either[error, email.Email]) E.Either[error, user.User] {
+func (f FireStore) GetUserInformation(idE E.Either[error, email.Email]) E.Either[error, user.User] {
 	clientE := newFireStoreClient()
 	defer func() {
 		E.Chain(func(client *firestore.Client) E.Either[error, string] {
@@ -32,12 +32,12 @@ func (f FireStore) GetUserData(emailE E.Either[error, email.Email]) E.Either[err
 
 	return FP.Pipe2(
 		clientE,
-		getUserDocument(emailE),
+		getUserDocument(idE),
 		createGetUserResponse,
 	)
 }
 
-func (f FireStore) SetUserData(user user.User) E.Either[error, user.User] {
+func (f FireStore) SetUserInformation(userE E.Either[error, user.User]) E.Either[error, user.User] {
 	clientE := newFireStoreClient()
 	defer func() {
 		E.Chain(func(client *firestore.Client) E.Either[error, string] {
@@ -47,8 +47,10 @@ func (f FireStore) SetUserData(user user.User) E.Either[error, user.User] {
 	}()
 
 	return FP.Pipe1(
-		clientE,
-		setUserDocument(user),
+		userE,
+		E.Chain(
+			func(user user.User) E.Either[error, user.User] { return setUserDocument(user)(clientE) },
+		),
 	)
 }
 
