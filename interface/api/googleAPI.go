@@ -1,6 +1,10 @@
 package api
 
 import (
+	user "authentication/Domain/models/User"
+	email "authentication/Domain/models/User/Email"
+	name "authentication/Domain/models/User/Name"
+	picture "authentication/Domain/models/User/Picture"
 	"context"
 	"fmt"
 	"os"
@@ -14,11 +18,7 @@ import (
 
 type GoogleAPI struct{}
 
-type GoogleAPIInterface interface {
-	GetUserInfo(authCodeE E.Either[error, string]) E.Either[error, *googleOAuth.Userinfo]
-}
-
-func (g GoogleAPI) GetUserInfo(authCodeE E.Either[error, string]) E.Either[error, *googleOAuth.Userinfo] {
+func (g GoogleAPI) GetUserInfo(authCodeE E.Either[error, string]) E.Either[error, user.User] {
 	// OAuth2 configの作成
 	oauth2Config := oauth2.Config{
 		ClientID:     os.Getenv("CLIENT_ID"),
@@ -28,11 +28,12 @@ func (g GoogleAPI) GetUserInfo(authCodeE E.Either[error, string]) E.Either[error
 		Endpoint:     google.Endpoint,
 	}
 
-	return FP.Pipe3(
+	return FP.Pipe4(
 		authCodeE,
 		getToken(oauth2Config),
 		getOAuth2Service(oauth2Config),
-		getUserInfo,
+		getOAuthUserInfo,
+		convertToUserInfo,
 	)
 }
 
@@ -62,7 +63,7 @@ func getOAuth2Service(oauth2Config oauth2.Config) func(tokenE E.Either[error, *o
 	}
 }
 
-func getUserInfo(oauth2ServiceE E.Either[error, *googleOAuth.Service]) E.Either[error, *googleOAuth.Userinfo] {
+func getOAuthUserInfo(oauth2ServiceE E.Either[error, *googleOAuth.Service]) E.Either[error, *googleOAuth.Userinfo] {
 	return E.Chain(
 		func(oauth2Service *googleOAuth.Service) E.Either[error, *googleOAuth.Userinfo] {
 			userInfo, err := oauth2Service.Userinfo.Get().Do()
@@ -71,4 +72,16 @@ func getUserInfo(oauth2ServiceE E.Either[error, *googleOAuth.Service]) E.Either[
 			}
 			return E.Right[error](userInfo)
 		})(oauth2ServiceE)
+}
+
+func convertToUserInfo(oauthUserE E.Either[error, *googleOAuth.Userinfo]) E.Either[error, user.User] {
+	return E.Chain[error](
+		func(oauthUser *googleOAuth.Userinfo) E.Either[error, user.User] {
+			nameE := name.NewName(oauthUser.Name)
+			emailE := email.NewEmail(oauthUser.Email)
+			pictureE := picture.NewPicture(oauthUser.Picture)
+			friendsE := make([]E.Either[error, email.Email], 0)
+			return user.NewUserFromEither(nameE, emailE, pictureE, friendsE)
+		},
+	)(oauthUserE)
 }
