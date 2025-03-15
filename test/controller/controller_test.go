@@ -10,6 +10,7 @@ import (
 
 	E "github.com/IBM/fp-go/either"
 
+	email "authentication/Domain/models/User/Email"
 	"authentication/controller"
 	"authentication/dto"
 
@@ -30,23 +31,23 @@ func TestLogin(t *testing.T) {
 	tests := []struct {
 		name           string
 		request        dto.LoginRequest
-		mockResponse   E.Either[error, dto.LoginResponse]
+		mockResponse   E.Either[error, dto.UserInformation]
 		expectedStatus int
-		expectedBody   dto.LoginResponse
+		expectedBody   dto.UserResponse
 	}{
 		{
 			name:           "Success",
 			request:        LOGIN_REQUEST["success"],
-			mockResponse:   E.Right[error](LOGIN_RESPONSE["success"]),
+			mockResponse:   E.Right[error](SERVICE_RESPONSE["success"]),
 			expectedStatus: http.StatusOK,
-			expectedBody:   LOGIN_RESPONSE["success"],
+			expectedBody:   WANT["success"],
 		},
 		{
 			name:           "Failure",
 			request:        LOGIN_REQUEST["failed"],
-			mockResponse:   E.Left[dto.LoginResponse](errors.New("invalid auth code")),
+			mockResponse:   E.Left[dto.UserInformation](errors.New("invalid auth code")),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   dto.LoginResponse{},
+			expectedBody:   dto.UserResponse{Name: "", Email: "", Picture: "", Friends: make([]string, 0)},
 		},
 	}
 
@@ -62,7 +63,7 @@ func TestLogin(t *testing.T) {
 			mockController.Login(recorder, req)
 
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
-			var actualResponse dto.LoginResponse
+			var actualResponse dto.UserResponse
 			err := json.NewDecoder(recorder.Body).Decode(&actualResponse)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedBody, actualResponse)
@@ -76,29 +77,34 @@ func TestGetUser(t *testing.T) {
 	tests := []struct {
 		name           string
 		request        dto.GetUserInfoRequest
-		mockResponse   E.Either[error, dto.GetUserInfoResponse]
+		mockResponse   E.Either[error, dto.UserInformation]
 		expectedStatus int
-		expectedBody   dto.GetUserInfoResponse
+		expectedBody   dto.UserResponse
 	}{
 		{
 			name:           "Success",
 			request:        GET_USER_REQUEST["success"],
-			mockResponse:   E.Right[error](GET_USER_RESPONSE["success"]),
+			mockResponse:   E.Right[error](SERVICE_RESPONSE["success"]),
 			expectedStatus: http.StatusOK,
-			expectedBody:   GET_USER_RESPONSE["success"],
+			expectedBody:   WANT["success"],
 		},
 		{
 			name:           "BadRequest_MissingID",
 			request:        GET_USER_REQUEST["failed"],
-			mockResponse:   E.Left[dto.GetUserInfoResponse](errors.New("missing ID")),
+			mockResponse:   E.Left[dto.UserInformation](errors.New("missing ID")),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   dto.GetUserInfoResponse{},
+			expectedBody:   dto.UserResponse{Name: "", Email: "", Picture: "", Friends: make([]string, 0)},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockService.On("GetUser", E.Right[error](tt.request.ID)).Return(tt.mockResponse)
+			e, err := E.Unwrap(email.NewEmail(tt.request.ID))
+			if err == nil {
+				mockService.On("GetUser", E.Right[error](e)).Return(tt.mockResponse)
+			} else {
+				mockService.On("GetUser", E.Left[email.Email](errors.New("mail: no address"))).Return(tt.mockResponse)
+			}
 
 			requestBody, _ := json.Marshal(tt.request)
 			req, _ := http.NewRequest("POST", "/get-user-info", bytes.NewReader(requestBody))
@@ -108,8 +114,8 @@ func TestGetUser(t *testing.T) {
 			mockController.GetUser(recorder, req)
 
 			assert.Equal(t, tt.expectedStatus, recorder.Code)
-			var actualResponse dto.GetUserInfoResponse
-			err := json.NewDecoder(recorder.Body).Decode(&actualResponse)
+			var actualResponse dto.UserResponse
+			err = json.NewDecoder(recorder.Body).Decode(&actualResponse)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedBody, actualResponse)
 		})

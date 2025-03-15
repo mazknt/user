@@ -1,6 +1,7 @@
 package controller_test
 
 import (
+	email "authentication/Domain/models/User/Email"
 	"authentication/dto"
 
 	E "github.com/IBM/fp-go/either"
@@ -11,13 +12,13 @@ type MockService struct {
 	mock.Mock
 }
 
-func (m *MockService) Login(authCodeE E.Either[error, string]) E.Either[error, dto.LoginResponse] {
+func (m *MockService) Login(authCodeE E.Either[error, string]) E.Either[error, dto.UserInformation] {
 	args := m.Called(authCodeE)
-	return args.Get(0).(E.Either[error, dto.LoginResponse])
+	return args.Get(0).(E.Either[error, dto.UserInformation])
 }
-func (m *MockService) GetUser(idE E.Either[error, string]) E.Either[error, dto.GetUserInfoResponse] {
+func (m *MockService) GetUser(idE E.Either[error, email.Email]) E.Either[error, dto.UserInformation] {
 	args := m.Called(idE)
-	return args.Get(0).(E.Either[error, dto.GetUserInfoResponse])
+	return args.Get(0).(E.Either[error, dto.UserInformation])
 }
 
 // func (m *MockService) GetUser(idE E.Either[error, string]) E.Either[error, dto.GetUserInfoResponse] {
