@@ -6,6 +6,7 @@ import (
 	picture "authentication/Domain/models/User/Picture"
 
 	E "github.com/IBM/fp-go/either"
+	F "github.com/IBM/fp-go/function"
 )
 
 type User struct {
@@ -21,29 +22,28 @@ func NewUserFromEither(
 	pictureE E.Either[error, picture.Picture],
 	friendsEs []E.Either[error, email.Email]) E.Either[error, User] {
 	friendsE := sequence(friendsEs)
+	return F.Pipe4(
+		E.Right[error](newUser),
+		E.Ap[func(e email.Email) func(p picture.Picture) func(fs []email.Email) User, error](nameE),
+		E.Ap[func(p picture.Picture) func(fs []email.Email) User, error](emailE),
+		E.Ap[func(fs []email.Email) User, error](pictureE),
+		E.Ap[User, error](friendsE),
+	)
+}
 
-	return E.Chain(
-		func(friends []email.Email) E.Either[error, User] {
-			return E.Chain(
-				func(name name.Name) E.Either[error, User] {
-					return E.Chain(
-						func(email email.Email) E.Either[error, User] {
-							return E.Chain(
-								func(picture picture.Picture) E.Either[error, User] {
-									return E.Right[error](User{
-										name:    name,
-										email:   email,
-										picture: picture,
-										friends: friends,
-									})
-								},
-							)(pictureE)
-						},
-					)(emailE)
-				},
-			)(nameE)
-		},
-	)(friendsE)
+func newUser(n name.Name) func(e email.Email) func(p picture.Picture) func(fs []email.Email) User {
+	return func(e email.Email) func(p picture.Picture) func(fs []email.Email) User {
+		return func(p picture.Picture) func(fs []email.Email) User {
+			return func(fs []email.Email) User {
+				return User{
+					name:    n,
+					email:   e,
+					picture: p,
+					friends: fs,
+				}
+			}
+		}
+	}
 }
 
 func NewUser(name name.Name, email email.Email, picture picture.Picture, friends []email.Email) User {
