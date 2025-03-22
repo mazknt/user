@@ -12,12 +12,12 @@ type MockFireStore struct {
 	mock.Mock
 }
 
-func (m *MockFireStore) GetUserInformation(idE E.Either[error, email.Email]) E.Either[error, user.User] {
-	args := m.Called(idE)
+func (m *MockFireStore) GetUserInformation(id email.Email) E.Either[error, user.User] {
+	args := m.Called(id)
 	return args.Get(0).(E.Either[error, user.User])
 }
 
-func (m *MockFireStore) SetUserInformation(userE E.Either[error, user.User]) E.Either[error, user.User] {
-	args := m.Called(userE)
+func (m *MockFireStore) SetUserInformation(u user.User) E.Either[error, user.User] {
+	args := m.Called(u)
 	return args.Get(0).(E.Either[error, user.User])
 }

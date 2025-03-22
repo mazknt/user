@@ -11,7 +11,7 @@ type MockGoogleAPI struct {
 	mock.Mock
 }
 
-func (m *MockGoogleAPI) GetUserInfo(authCodeE E.Either[error, string]) E.Either[error, user.User] {
-	args := m.Called(authCodeE)
+func (m *MockGoogleAPI) GetUserInfo(authCode string) E.Either[error, user.User] {
+	args := m.Called(authCode)
 	return args.Get(0).(E.Either[error, user.User])
 }

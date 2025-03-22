@@ -8,7 +8,9 @@ import (
 	"authentication/dto"
 	"log"
 
+	A "github.com/IBM/fp-go/array"
 	E "github.com/IBM/fp-go/either"
+	F "github.com/IBM/fp-go/function"
 )
 
 var RESPONSE = map[string]user.User{
@@ -41,31 +43,26 @@ var LOGIN_REQUEST = map[string]string{
 }
 
 func newUserInformation(n string, e string, p string, fs []string) dto.UserInformation {
-	nameOb := name.NewName(n)
-	emailOb := email.NewEmail(e)
-	pictureOb := picture.NewPicture(p)
-	friendsOb := make([]E.Either[error, email.Email], 0)
-	for _, em := range fs {
-		friendsOb = append(friendsOb, email.NewEmail(em))
-	}
-	userOb := user.NewUserFromEither(nameOb, emailOb, pictureOb, friendsOb)
-	user, err := E.Unwrap(userOb)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return dto.NewUserInformaiton(user)
+	return F.Pipe1(
+		newUser(n, e, p, fs),
+		dto.NewUserInformaiton,
+	)
 }
 
 func newUser(n string, e string, p string, fs []string) user.User {
-	nameOb := name.NewName(n)
-	emailOb := email.NewEmail(e)
-	pictureOb := picture.NewPicture(p)
-	friendsOb := make([]E.Either[error, email.Email], 0)
-	for _, em := range fs {
-		friendsOb = append(friendsOb, email.NewEmail(em))
-	}
-	userOb := user.NewUserFromEither(nameOb, emailOb, pictureOb, friendsOb)
-	user, err := E.Unwrap(userOb)
+	userE := F.Pipe4(
+		E.Right[error](user.NewUser),
+		E.Ap[func(e email.Email) func(picture picture.Picture) func(friends []email.Email) user.User](name.NewName(n)),
+		E.Ap[func(picture picture.Picture) func(friends []email.Email) user.User](email.NewEmail(e)),
+		E.Ap[func(friends []email.Email) user.User](picture.NewPicture(p)),
+		E.Ap[user.User](
+			F.Pipe2(
+				fs,
+				A.Map(email.NewEmail),
+				E.SequenceArray,
+			)),
+	)
+	user, err := E.Unwrap(userE)
 	if err != nil {
 		log.Fatal(err)
 	}

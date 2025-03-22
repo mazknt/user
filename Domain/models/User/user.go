@@ -4,8 +4,6 @@ import (
 	email "authentication/Domain/models/User/Email"
 	name "authentication/Domain/models/User/Name"
 	picture "authentication/Domain/models/User/Picture"
-
-	E "github.com/IBM/fp-go/either"
 )
 
 type User struct {
@@ -15,65 +13,29 @@ type User struct {
 	friends []email.Email   `json:"friends"`
 }
 
-func NewUserFromEither(
-	nameE E.Either[error, name.Name],
-	emailE E.Either[error, email.Email],
-	pictureE E.Either[error, picture.Picture],
-	friendsEs []E.Either[error, email.Email]) E.Either[error, User] {
-	friendsE := sequence(friendsEs)
-
-	return E.Chain(
-		func(friends []email.Email) E.Either[error, User] {
-			return E.Chain(
-				func(name name.Name) E.Either[error, User] {
-					return E.Chain(
-						func(email email.Email) E.Either[error, User] {
-							return E.Chain(
-								func(picture picture.Picture) E.Either[error, User] {
-									return E.Right[error](User{
-										name:    name,
-										email:   email,
-										picture: picture,
-										friends: friends,
-									})
-								},
-							)(pictureE)
-						},
-					)(emailE)
-				},
-			)(nameE)
-		},
-	)(friendsE)
-}
-
-func NewUser(name name.Name, email email.Email, picture picture.Picture, friends []email.Email) User {
-	return User{
-		name:    name,
-		email:   email,
-		picture: picture,
-		friends: friends,
+func NewUser(name name.Name) func(e email.Email) func(picture picture.Picture) func(friends []email.Email) User {
+	return func(e email.Email) func(picture picture.Picture) func(friends []email.Email) User {
+		return func(picture picture.Picture) func(friends []email.Email) User {
+			return func(friends []email.Email) User {
+				return User{
+					name:    name,
+					email:   e,
+					picture: picture,
+					friends: friends,
+				}
+			}
+		}
 	}
 }
 
 func (u User) GetName() string {
 	return u.name.Value()
 }
-func GetNameEither(u E.Either[error, User]) E.Either[error, string] {
-	return E.Map[error](
-		func(user User) string {
-			return user.GetName()
-		})(u)
-}
 
 func (u User) GetEmail() string {
 	return u.email.Value()
 }
-func GetEmailEither(u E.Either[error, User]) E.Either[error, string] {
-	return E.Map[error](
-		func(user User) string {
-			return user.GetName()
-		})(u)
-}
+
 func (u User) GetPicture() string {
 	return u.picture.Value()
 }
@@ -101,35 +63,12 @@ func (u User) GetFriendsObject() []email.Email {
 	return emails
 }
 
-func (u User) UpdateNameFromEither(nameE E.Either[error, name.Name]) E.Either[error, User] {
-	return E.Map[error](
-		func(name name.Name) User {
-			return NewUser(name, u.email, u.picture, u.friends)
-		})(nameE)
+func (u User) UpdateName(n name.Name) User {
+	return NewUser(n)(u.email)(u.picture)(u.friends)
 }
-func (u User) UpdateEmailFromEither(emailE E.Either[error, email.Email]) E.Either[error, User] {
-	return E.Map[error](
-		func(email email.Email) User {
-			return NewUser(u.name, email, u.picture, u.friends)
-		})(emailE)
+func (u User) UpdateEmail(e email.Email) User {
+	return NewUser(u.name)(e)(u.picture)(u.friends)
 }
-func (u User) UpdatePictureFromEither(pictureE E.Either[error, picture.Picture]) E.Either[error, User] {
-	return E.Map[error](
-		func(picture picture.Picture) User {
-			return NewUser(u.name, u.email, picture, u.friends)
-		})(pictureE)
-}
-
-func sequence[L any, R any](arr []E.Either[L, R]) E.Either[L, []R] {
-	results := make([]R, 0, len(arr))
-
-	for _, e := range arr {
-		val, err := E.Unwrap(e)
-		if E.IsLeft(e) {
-			return E.Left[[]R](err)
-		}
-		results = append(results, val)
-	}
-
-	return E.Right[L, []R](results)
+func (u User) UpdatePicture(p picture.Picture) User {
+	return NewUser(u.name)(u.email)(p)(u.friends)
 }

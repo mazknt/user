@@ -7,5 +7,5 @@ import (
 )
 
 type AuthorizationServiceIF interface {
-	GetUserInfo(authCodeE E.Either[error, string]) E.Either[error, user.User]
+	GetUserInfo(authCode string) E.Either[error, user.User]
 }

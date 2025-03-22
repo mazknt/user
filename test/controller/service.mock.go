@@ -12,12 +12,12 @@ type MockService struct {
 	mock.Mock
 }
 
-func (m *MockService) Login(authCodeE E.Either[error, string]) E.Either[error, dto.UserInformation] {
-	args := m.Called(authCodeE)
+func (m *MockService) Login(authCode string) E.Either[error, dto.UserInformation] {
+	args := m.Called(authCode)
 	return args.Get(0).(E.Either[error, dto.UserInformation])
 }
-func (m *MockService) GetUser(idE E.Either[error, email.Email]) E.Either[error, dto.UserInformation] {
-	args := m.Called(idE)
+func (m *MockService) GetUser(id email.Email) E.Either[error, dto.UserInformation] {
+	args := m.Called(id)
 	return args.Get(0).(E.Either[error, dto.UserInformation])
 }
 

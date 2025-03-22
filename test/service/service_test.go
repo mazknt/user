@@ -8,10 +8,7 @@ import (
 
 	user "authentication/Domain/models/User"
 	email "authentication/Domain/models/User/Email"
-	name "authentication/Domain/models/User/Name"
-	picture "authentication/Domain/models/User/Picture"
 
-	A "github.com/IBM/fp-go/array"
 	E "github.com/IBM/fp-go/either"
 	"github.com/stretchr/testify/assert"
 )
@@ -19,20 +16,20 @@ import (
 func TestLogin(t *testing.T) {
 	tests := []struct {
 		name      string
-		request   E.Either[error, string]
+		request   string
 		googleAPI struct {
 			getUserInfo struct {
-				request  E.Either[error, string]
+				request  string
 				response E.Either[error, user.User]
 			}
 		}
 		firestore struct {
 			getUser struct {
-				request  E.Either[error, email.Email]
+				request  email.Email
 				response E.Either[error, user.User]
 			}
 			setUser struct {
-				request  E.Either[error, user.User]
+				request  user.User
 				response E.Either[error, user.User]
 			}
 		}
@@ -41,54 +38,44 @@ func TestLogin(t *testing.T) {
 		// 成功: 新規ユーザー
 		{
 			name:    "成功: 新規ユーザー",
-			request: E.Right[error]("valid_auth_code"),
+			request: "valid_auth_code",
 			googleAPI: struct {
 				getUserInfo struct {
-					request  E.Either[error, string]
+					request  string
 					response E.Either[error, user.User]
 				}
 			}{
 				getUserInfo: struct {
-					request  E.Either[error, string]
+					request  string
 					response E.Either[error, user.User]
 				}{
-					request: E.Right[error]("valid_auth_code"),
-					response: user.NewUserFromEither(name.NewName("get_user user"),
-						email.NewEmail("get_user@example.com"),
-						picture.NewPicture("https://login"),
-						A.Map(
-							func(e string) E.Either[error, email.Email] { return email.NewEmail(e) },
-						)([]string{"get@user1.com", "get@user2.com"})),
+					request:  "valid_auth_code",
+					response: E.Right[error](newUser("get_user user", "get_user@example.com", "https://login", []string{"get@user1.com", "get@user2.com"})),
 					// response: E.Right[error](user.User{Email: "login@example.com"}),
 				},
 			},
 			firestore: struct {
 				getUser struct {
-					request  E.Either[error, email.Email]
+					request  email.Email
 					response E.Either[error, user.User]
 				}
 				setUser struct {
-					request  E.Either[error, user.User]
+					request  user.User
 					response E.Either[error, user.User]
 				}
 			}{
 				getUser: struct {
-					request  E.Either[error, email.Email]
+					request  email.Email
 					response E.Either[error, user.User]
 				}{
-					request:  email.NewEmail("get_user@example.com"),
+					request:  newEmail("get_user@example.com"),
 					response: E.Left[user.User](errors.New("user is not exist")),
 				},
 				setUser: struct {
-					request  E.Either[error, user.User]
+					request  user.User
 					response E.Either[error, user.User]
 				}{
-					request: user.NewUserFromEither(name.NewName("get_user user"),
-						email.NewEmail("get_user@example.com"),
-						picture.NewPicture("https://login"),
-						A.Map(
-							func(e string) E.Either[error, email.Email] { return email.NewEmail(e) },
-						)([]string{"get@user1.com", "get@user2.com"})),
+					request:  newUser("get_user user", "get_user@example.com", "https://login", []string{"get@user1.com", "get@user2.com"}),
 					response: E.Right[error](RESPONSE["set_user"]),
 				},
 			},
@@ -98,140 +85,90 @@ func TestLogin(t *testing.T) {
 		// 成功: 登録済みユーザー
 		{
 			name:    "成功: 登録済みユーザー",
-			request: E.Right[error]("valid_auth_code"),
+			request: "valid_auth_code",
 			googleAPI: struct {
 				getUserInfo struct {
-					request  E.Either[error, string]
+					request  string
 					response E.Either[error, user.User]
 				}
 			}{
 				getUserInfo: struct {
-					request  E.Either[error, string]
+					request  string
 					response E.Either[error, user.User]
 				}{
-					request: E.Right[error]("valid_auth_code"),
-					response: user.NewUserFromEither(name.NewName("get_user user"),
-						email.NewEmail("get_user@example.com"),
-						picture.NewPicture("https://login"),
-						A.Map(
-							func(e string) E.Either[error, email.Email] { return email.NewEmail(e) },
-						)([]string{"get@user1.com", "get@user2.com"})),
+					request:  "valid_auth_code",
+					response: E.Right[error](newUser("get_user user", "get_user@example.com", "https://login", []string{"get@user1.com", "get@user2.com"})),
 				},
 			},
 			firestore: struct {
 				getUser struct {
-					request  E.Either[error, email.Email]
+					request  email.Email
 					response E.Either[error, user.User]
 				}
 				setUser struct {
-					request  E.Either[error, user.User]
+					request  user.User
 					response E.Either[error, user.User]
 				}
 			}{
 				getUser: struct {
-					request  E.Either[error, email.Email]
+					request  email.Email
 					response E.Either[error, user.User]
 				}{
-					request:  email.NewEmail("get_user@example.com"),
+					request:  newEmail("get_user@example.com"),
 					response: E.Right[error](RESPONSE["get_user"]),
 				},
 				setUser: struct {
-					request  E.Either[error, user.User]
+					request  user.User
 					response E.Either[error, user.User]
 				}{
-					request:  E.Left[user.User](errors.New("not called")),
+					request:  user.User{},
 					response: E.Left[user.User](errors.New("not called")),
 				},
 			},
 			want: E.Right[error](WANT["get_user"]),
 		},
 
-		// 失敗: authCode の取得に失敗
-		{
-			name:    "失敗: authCode の取得に失敗",
-			request: E.Left[string](errors.New("authCode が無効")),
-			googleAPI: struct {
-				getUserInfo struct {
-					request  E.Either[error, string]
-					response E.Either[error, user.User]
-				}
-			}{
-				getUserInfo: struct {
-					request  E.Either[error, string]
-					response E.Either[error, user.User]
-				}{
-					request:  E.Left[string](errors.New("authCode が無効")),
-					response: E.Left[user.User](errors.New("authCode が無効")),
-				},
-			},
-			firestore: struct {
-				getUser struct {
-					request  E.Either[error, email.Email]
-					response E.Either[error, user.User]
-				}
-				setUser struct {
-					request  E.Either[error, user.User]
-					response E.Either[error, user.User]
-				}
-			}{
-				getUser: struct {
-					request  E.Either[error, email.Email]
-					response E.Either[error, user.User]
-				}{
-					request:  E.Left[email.Email](errors.New("authCode が無効")),
-					response: E.Left[user.User](errors.New("authCode が無効")),
-				},
-				setUser: struct {
-					request  E.Either[error, user.User]
-					response E.Either[error, user.User]
-				}{
-					request:  E.Left[user.User](errors.New("authCode が無効")),
-					response: E.Left[user.User](errors.New("authCode が無効")),
-				},
-			},
-			want: E.Left[dto.UserInformation](errors.New("authCode が無効")),
-		},
-
 		// 失敗: OAuthからのユーザー情報取得を失敗するパターン
 		{
 			name:    "失敗: OAuthからのユーザー情報取得を失敗するパターン",
-			request: E.Right[error]("valid_auth_code"),
+			request: "valid_auth_code",
 			googleAPI: struct {
 				getUserInfo struct {
-					request  E.Either[error, string]
+					request  string
 					response E.Either[error, user.User]
 				}
 			}{
 				getUserInfo: struct {
-					request  E.Either[error, string]
+					request  string
 					response E.Either[error, user.User]
 				}{
-					request:  E.Right[error]("valid_auth_code"),
+					request:  "valid_auth_code",
 					response: E.Left[user.User](errors.New("OAuthユーザーの取得に失敗")),
 				},
 			},
 			firestore: struct {
 				getUser struct {
-					request  E.Either[error, email.Email]
+					request  email.Email
 					response E.Either[error, user.User]
 				}
 				setUser struct {
-					request  E.Either[error, user.User]
+					request  user.User
 					response E.Either[error, user.User]
 				}
 			}{
 				getUser: struct {
-					request  E.Either[error, email.Email]
+					request  email.Email
 					response E.Either[error, user.User]
 				}{
-					request:  E.Left[email.Email](errors.New("OAuthユーザーの取得に失敗")),
+					request: newEmail(""),
+					// request:  newEmail("OAuthユーザーの取得に失敗"),
 					response: E.Left[user.User](errors.New("OAuthユーザーの取得に失敗")),
 				},
 				setUser: struct {
-					request  E.Either[error, user.User]
+					request  user.User
 					response E.Either[error, user.User]
 				}{
-					request:  E.Left[user.User](errors.New("OAuthユーザーの取得に失敗")),
+					request:  user.User{},
 					response: E.Left[user.User](errors.New("OAuthユーザーの取得に失敗")),
 				},
 			},
@@ -241,48 +178,43 @@ func TestLogin(t *testing.T) {
 		// 失敗: DBからの取得を失敗するパターン
 		{
 			name:    "失敗: DBからの取得を失敗するパターン",
-			request: E.Right[error]("valid_auth_code"),
+			request: "valid_auth_code",
 			googleAPI: struct {
 				getUserInfo struct {
-					request  E.Either[error, string]
+					request  string
 					response E.Either[error, user.User]
 				}
 			}{
 				getUserInfo: struct {
-					request  E.Either[error, string]
+					request  string
 					response E.Either[error, user.User]
 				}{
-					request: E.Right[error]("valid_auth_code"),
-					response: user.NewUserFromEither(name.NewName("get_user user"),
-						email.NewEmail("get_user@example.com"),
-						picture.NewPicture("https://login"),
-						A.Map(
-							func(e string) E.Either[error, email.Email] { return email.NewEmail(e) },
-						)([]string{"get@user1.com", "get@user2.com"})),
+					request:  "valid_auth_code",
+					response: E.Right[error](newUser("get_user user", "get_user@example.com", "https://login", []string{"get@user1.com", "get@user2.com"})),
 				},
 			},
 			firestore: struct {
 				getUser struct {
-					request  E.Either[error, email.Email]
+					request  email.Email
 					response E.Either[error, user.User]
 				}
 				setUser struct {
-					request  E.Either[error, user.User]
+					request  user.User
 					response E.Either[error, user.User]
 				}
 			}{
 				getUser: struct {
-					request  E.Either[error, email.Email]
+					request  email.Email
 					response E.Either[error, user.User]
 				}{
-					request:  email.NewEmail("get_user@example.com"),
+					request:  newEmail("get_user@example.com"),
 					response: E.Left[user.User](errors.New("DBユーザーの取得に失敗")),
 				},
 				setUser: struct {
-					request  E.Either[error, user.User]
+					request  user.User
 					response E.Either[error, user.User]
 				}{
-					request:  E.Left[user.User](errors.New("")),
+					request:  user.User{},
 					response: E.Left[user.User](errors.New("DBユーザーの取得に失敗")),
 				},
 			},
@@ -300,4 +232,10 @@ func TestLogin(t *testing.T) {
 		got := mockService.Login(tt.request)
 		assert.Equal(t, tt.want, got)
 	}
+}
+
+func newEmail(e string) email.Email {
+	em := email.NewEmail(e)
+	ema, _ := E.Unwrap(em)
+	return ema
 }

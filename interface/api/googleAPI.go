@@ -18,7 +18,7 @@ import (
 
 type GoogleAPI struct{}
 
-func (g GoogleAPI) GetUserInfo(authCodeE E.Either[error, string]) E.Either[error, user.User] {
+func (g GoogleAPI) GetUserInfo(authCode string) E.Either[error, user.User] {
 	// OAuth2 configの作成
 	oauth2Config := oauth2.Config{
 		ClientID:     os.Getenv("CLIENT_ID"),
@@ -29,23 +29,21 @@ func (g GoogleAPI) GetUserInfo(authCodeE E.Either[error, string]) E.Either[error
 	}
 
 	return FP.Pipe4(
-		authCodeE,
+		authCode,
 		getToken(oauth2Config),
 		getOAuth2Service(oauth2Config),
-		getOAuthUserInfo,
-		convertToUserInfo,
+		E.Chain(getOAuthUserInfo),
+		E.Chain(convertToUserInfo),
 	)
 }
 
-func getToken(oauth2Config oauth2.Config) func(authCodeE E.Either[error, string]) E.Either[error, *oauth2.Token] {
-	return func(authCodeE E.Either[error, string]) E.Either[error, *oauth2.Token] {
-		return E.Chain(func(authCode string) E.Either[error, *oauth2.Token] {
-			token, err := oauth2Config.Exchange(context.Background(), authCode)
-			if err != nil {
-				return E.Left[*oauth2.Token](fmt.Errorf("failed to get token: %w", err))
-			}
-			return E.Right[error](token)
-		})(authCodeE)
+func getToken(oauth2Config oauth2.Config) func(authCode string) E.Either[error, *oauth2.Token] {
+	return func(authCode string) E.Either[error, *oauth2.Token] {
+		token, err := oauth2Config.Exchange(context.Background(), authCode)
+		if err != nil {
+			return E.Left[*oauth2.Token](fmt.Errorf("failed to get token: %w", err))
+		}
+		return E.Right[error](token)
 	}
 }
 
@@ -63,25 +61,21 @@ func getOAuth2Service(oauth2Config oauth2.Config) func(tokenE E.Either[error, *o
 	}
 }
 
-func getOAuthUserInfo(oauth2ServiceE E.Either[error, *googleOAuth.Service]) E.Either[error, *googleOAuth.Userinfo] {
-	return E.Chain(
-		func(oauth2Service *googleOAuth.Service) E.Either[error, *googleOAuth.Userinfo] {
-			userInfo, err := oauth2Service.Userinfo.Get().Do()
-			if err != nil {
-				return E.Left[*googleOAuth.Userinfo](fmt.Errorf("failed to get userInfo: %v", err.Error()))
-			}
-			return E.Right[error](userInfo)
-		})(oauth2ServiceE)
+func getOAuthUserInfo(oauth2Service *googleOAuth.Service) E.Either[error, *googleOAuth.Userinfo] {
+	userInfo, err := oauth2Service.Userinfo.Get().Do()
+	if err != nil {
+		return E.Left[*googleOAuth.Userinfo](fmt.Errorf("failed to get userInfo: %v", err.Error()))
+	}
+	return E.Right[error](userInfo)
 }
 
-func convertToUserInfo(oauthUserE E.Either[error, *googleOAuth.Userinfo]) E.Either[error, user.User] {
-	return E.Chain[error](
-		func(oauthUser *googleOAuth.Userinfo) E.Either[error, user.User] {
-			nameE := name.NewName(oauthUser.Name)
-			emailE := email.NewEmail(oauthUser.Email)
-			pictureE := picture.NewPicture(oauthUser.Picture)
-			friendsE := make([]E.Either[error, email.Email], 0)
-			return user.NewUserFromEither(nameE, emailE, pictureE, friendsE)
-		},
-	)(oauthUserE)
+func convertToUserInfo(oauthUser *googleOAuth.Userinfo) E.Either[error, user.User] {
+	return FP.Pipe4(
+		E.Right[error](user.NewUser),
+		E.Ap[func(e email.Email) func(picture picture.Picture) func(friends []email.Email) user.User](name.NewName(oauthUser.Name)),
+		E.Ap[func(picture picture.Picture) func(friends []email.Email) user.User](email.NewEmail(oauthUser.Email)),
+		E.Ap[func(friends []email.Email) user.User](picture.NewPicture(oauthUser.Picture)),
+		E.Ap[user.User](E.Right[error](make([]email.Email, 0))),
+	)
+
 }
