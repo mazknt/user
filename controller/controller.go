@@ -1,6 +1,7 @@
 package controller
 
 import (
+	email "authentication/Domain/models/User/Email"
 	"authentication/dto"
 	"authentication/service"
 	json_util "authentication/util/json"
@@ -13,10 +14,10 @@ import (
 )
 
 type Controller struct {
-	Service service.ServiceInterface
+	Service service.UserServiceInterface
 }
 
-func NewController(Service service.Service) *Controller {
+func NewController(Service service.UserServiceInterface) *Controller {
 	return &Controller{
 		Service: Service,
 	}
@@ -28,20 +29,21 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		E.Map[error](func(req dto.LoginRequest) string { return req.Code }),
 		c.Service.Login,
 		E.Fold(
-			func(err error) dto.LoginResponse {
+			func(err error) dto.UserInformation {
 				log.Println("error: %w", err)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
-				return dto.LoginResponse{}
+				return dto.UserInformation{}
 			},
-			func(res dto.LoginResponse) dto.LoginResponse {
+			func(res dto.UserInformation) dto.UserInformation {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				return res
 			},
 		),
 	)
-	if err := json.NewEncoder(w).Encode(userInfo); err != nil {
+
+	if err := json.NewEncoder(w).Encode(dto.CreateUserResponse(userInfo)); err != nil {
 		log.Println("Error encoding userInfo:", err)
 		http.Error(w, "Failed to encode user info", http.StatusInternalServerError)
 	}
@@ -49,17 +51,18 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Controller) GetUser(w http.ResponseWriter, r *http.Request) {
-	userInfo := FP.Pipe3(
+	userInfo := FP.Pipe4(
 		json_util.ReadRequest[dto.GetUserInfoRequest](r),
 		E.Map[error](func(req dto.GetUserInfoRequest) string { return req.ID }),
+		E.Chain(func(id string) E.Either[error, email.Email] { return email.NewEmail(id) }),
 		c.Service.GetUser,
 		E.Fold(
-			func(err error) dto.GetUserInfoResponse {
+			func(err error) dto.UserInformation {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
-				return dto.GetUserInfoResponse{}
+				return dto.UserInformation{}
 			},
-			func(res dto.GetUserInfoResponse) dto.GetUserInfoResponse {
+			func(res dto.UserInformation) dto.UserInformation {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				return res
@@ -67,7 +70,7 @@ func (c *Controller) GetUser(w http.ResponseWriter, r *http.Request) {
 		),
 	)
 
-	if err := json.NewEncoder(w).Encode(userInfo); err != nil {
+	if err := json.NewEncoder(w).Encode(dto.CreateUserResponse(userInfo)); err != nil {
 		log.Println("Error encoding userInfo:", err)
 		http.Error(w, "Failed to encode user info", http.StatusInternalServerError)
 	}
