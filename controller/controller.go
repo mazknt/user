@@ -27,7 +27,7 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	userInfo := FP.Pipe3(
 		json_util.ReadRequest[dto.LoginRequest](r),
 		E.Map[error](func(req dto.LoginRequest) string { return req.Code }),
-		c.Service.Login,
+		E.Chain(c.Service.Login),
 		E.Fold(
 			func(err error) dto.UserInformation {
 				log.Println("error: %w", err)
@@ -55,7 +55,7 @@ func (c *Controller) GetUser(w http.ResponseWriter, r *http.Request) {
 		json_util.ReadRequest[dto.GetUserInfoRequest](r),
 		E.Map[error](func(req dto.GetUserInfoRequest) string { return req.ID }),
 		E.Chain(func(id string) E.Either[error, email.Email] { return email.NewEmail(id) }),
-		c.Service.GetUser,
+		E.Chain(c.Service.GetUser),
 		E.Fold(
 			func(err error) dto.UserInformation {
 				w.Header().Set("Content-Type", "application/json")

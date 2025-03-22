@@ -18,8 +18,8 @@ type User struct {
 }
 
 type UserServiceInterface interface {
-	Login(authCodeE E.Either[error, string]) E.Either[error, dto.UserInformation]
-	GetUser(idE E.Either[error, email.Email]) E.Either[error, dto.UserInformation]
+	Login(authCode string) E.Either[error, dto.UserInformation]
+	GetUser(id email.Email) E.Either[error, dto.UserInformation]
 }
 
 func NewService(authorizeAPI apiIF.AuthorizationServiceIF, userRepository repositoryIF.UserIF) User {
@@ -29,35 +29,31 @@ func NewService(authorizeAPI apiIF.AuthorizationServiceIF, userRepository reposi
 	}
 }
 
-func (s User) Login(authCodeE E.Either[error, string]) E.Either[error, dto.UserInformation] {
-	userE := s.authorizeAPI.GetUserInfo(authCodeE)
+func (s User) Login(authCode string) E.Either[error, dto.UserInformation] {
+	userE := s.authorizeAPI.GetUserInfo(authCode)
 	idE := E.Map[error](
 		func(user user.User) email.Email {
 			return user.GetEmailObject()
 		})(userE)
 
-	return FP.Pipe2(
-		domainservice.CheckDuplicate(s.userRepository)(idE),
+	return FP.Pipe4(
+		E.Right[error](domainservice.CheckDuplicate(s.userRepository)),
+		E.Ap[E.Either[error, bool]](idE),
+		E.Flatten,
 		E.Chain(
 			func(duplicate bool) E.Either[error, user.User] {
 				if duplicate {
-					return s.userRepository.GetUserInformation(idE)
+					return E.Chain(s.userRepository.GetUserInformation)(idE)
 				}
-				return s.userRepository.SetUserInformation(userE)
+				return E.Chain(s.userRepository.SetUserInformation)(userE)
 			}),
-		E.Map[error](
-			func(user user.User) dto.UserInformation {
-				return dto.NewUserInformaiton(user)
-			}),
+		E.Map[error](dto.NewUserInformaiton),
 	)
 }
 
-func (s User) GetUser(idE E.Either[error, email.Email]) E.Either[error, dto.UserInformation] {
+func (s User) GetUser(id email.Email) E.Either[error, dto.UserInformation] {
 	return FP.Pipe1(
-		s.userRepository.GetUserInformation(idE),
-		E.Map[error](
-			func(user user.User) dto.UserInformation {
-				return dto.NewUserInformaiton(user)
-			}),
+		s.userRepository.GetUserInformation(id),
+		E.Map[error](dto.NewUserInformaiton),
 	)
 }

@@ -9,10 +9,10 @@ import (
 	FP "github.com/IBM/fp-go/function"
 )
 
-func CheckDuplicate(userRepository repositoryIF.UserIF) func(idE E.Either[error, email.Email]) E.Either[error, bool] {
-	return func(idE E.Either[error, email.Email]) E.Either[error, bool] {
+func CheckDuplicate(userRepository repositoryIF.UserIF) func(id email.Email) E.Either[error, bool] {
+	return func(id email.Email) E.Either[error, bool] {
 		return FP.Pipe1(
-			userRepository.GetUserInformation(idE),
+			userRepository.GetUserInformation(id),
 			E.Fold(
 				func(err error) E.Either[error, bool] {
 					if err.Error() == "user is not exist" {

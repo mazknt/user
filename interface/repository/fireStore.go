@@ -21,7 +21,7 @@ import (
 type FireStore struct {
 }
 
-func (f FireStore) GetUserData(emailE E.Either[error, email.Email]) E.Either[error, user.User] {
+func (f FireStore) GetUserInformation(id email.Email) E.Either[error, user.User] {
 	clientE := newFireStoreClient()
 	defer func() {
 		E.Chain(func(client *firestore.Client) E.Either[error, string] {
@@ -32,12 +32,12 @@ func (f FireStore) GetUserData(emailE E.Either[error, email.Email]) E.Either[err
 
 	return FP.Pipe2(
 		clientE,
-		getUserDocument(emailE),
-		createGetUserResponse,
+		E.Chain(getUserDocument(id)),
+		E.Chain(createGetUserResponse),
 	)
 }
 
-func (f FireStore) SetUserData(user user.User) E.Either[error, user.User] {
+func (f FireStore) SetUserInformation(user user.User) E.Either[error, user.User] {
 	clientE := newFireStoreClient()
 	defer func() {
 		E.Chain(func(client *firestore.Client) E.Either[error, string] {
@@ -79,13 +79,9 @@ func convertFromInterface[T any](doc *firestore.DocumentSnapshot, key string) []
 	return strSlice
 }
 
-func getUserDocument(emailE E.Either[error, email.Email]) func(E.Either[error, *firestore.Client]) E.Either[error, *firestore.DocumentSnapshot] {
-	return func(clientE E.Either[error, *firestore.Client]) E.Either[error, *firestore.DocumentSnapshot] {
-		return E.Chain(func(client *firestore.Client) E.Either[error, *firestore.DocumentSnapshot] {
-			return E.Chain(func(email email.Email) E.Either[error, *firestore.DocumentSnapshot] {
-				return getUserDocumentFromUserInfo(email, client)
-			})(emailE)
-		})(clientE)
+func getUserDocument(e email.Email) func(client *firestore.Client) E.Either[error, *firestore.DocumentSnapshot] {
+	return func(client *firestore.Client) E.Either[error, *firestore.DocumentSnapshot] {
+		return getUserDocumentFromUserInfo(e, client)
 	}
 }
 
@@ -115,25 +111,21 @@ func setUserDocument(userInfo user.User) func(E.Either[error, *firestore.Client]
 	}
 }
 
-func createGetUserResponse(docE E.Either[error, *firestore.DocumentSnapshot]) E.Either[error, user.User] {
-	return E.Chain(
-		func(doc *firestore.DocumentSnapshot) E.Either[error, user.User] {
-			if !doc.Exists() {
-				return E.Left[user.User](errors.New("user is not exist"))
-			}
+func createGetUserResponse(doc *firestore.DocumentSnapshot) E.Either[error, user.User] {
+	if !doc.Exists() {
+		return E.Left[user.User](errors.New("user is not exist"))
+	}
 
-			friendsE := FP.Pipe1(convertFromInterface[string](doc, "friends"),
-				A.Map(
-					func(id string) E.Either[error, email.Email] {
-						return email.NewEmail(id)
-					},
-				))
-
-			return user.NewUserFromEither(
-				name.NewName(doc.Data()["name"].(string)),
-				email.NewEmail(doc.Data()["email"].(string)),
-				picture.NewPicture(doc.Data()["picture"].(string)),
-				friendsE,
-			)
-		})(docE)
+	return FP.Pipe4(
+		E.Right[error](user.NewUser),
+		E.Ap[func(e email.Email) func(picture picture.Picture) func(friends []email.Email) user.User](name.NewName(doc.Data()["name"].(string))),
+		E.Ap[func(picture picture.Picture) func(friends []email.Email) user.User](email.NewEmail(doc.Data()["email"].(string))),
+		E.Ap[func(friends []email.Email) user.User](picture.NewPicture(doc.Data()["picture"].(string))),
+		E.Ap[user.User](
+			FP.Pipe2(
+				convertFromInterface[string](doc, "friends"),
+				A.Map(email.NewEmail),
+				E.SequenceArray,
+			)),
+	)
 }

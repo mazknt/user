@@ -53,7 +53,7 @@ func TestLogin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockService.On("Login", E.Right[error](tt.request.Code)).Return(tt.mockResponse)
+			mockService.On("Login", tt.request.Code).Return(tt.mockResponse)
 
 			requestBody, _ := json.Marshal(tt.request)
 			req, _ := http.NewRequest("POST", "/login", bytes.NewReader(requestBody))
@@ -101,9 +101,7 @@ func TestGetUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e, err := E.Unwrap(email.NewEmail(tt.request.ID))
 			if err == nil {
-				mockService.On("GetUser", E.Right[error](e)).Return(tt.mockResponse)
-			} else {
-				mockService.On("GetUser", E.Left[email.Email](errors.New("mail: no address"))).Return(tt.mockResponse)
+				mockService.On("GetUser", e).Return(tt.mockResponse)
 			}
 
 			requestBody, _ := json.Marshal(tt.request)

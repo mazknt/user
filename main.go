@@ -1,8 +1,9 @@
 package main
 
 import (
-	"authentication/api"
 	"authentication/controller"
+	"authentication/interface/api"
+	"authentication/interface/repository"
 	"authentication/service"
 	"log"
 	"net/http"
@@ -14,8 +15,9 @@ import (
 func main() {
 	ctrl := controller.NewController(
 		service.NewService(
+			// api.GoogleAPI{},
 			api.GoogleAPI{},
-			api.FireStore{},
+			repository.FireStore{},
 		),
 	)
 

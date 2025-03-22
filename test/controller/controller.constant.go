@@ -7,7 +7,9 @@ import (
 	picture "authentication/Domain/models/User/Picture"
 	"authentication/dto"
 
+	A "github.com/IBM/fp-go/array"
 	E "github.com/IBM/fp-go/either"
+	F "github.com/IBM/fp-go/function"
 )
 
 var SERVICE_RESPONSE = map[string]dto.UserInformation{
@@ -53,14 +55,18 @@ var GET_USER_REQUEST = map[string]dto.GetUserInfoRequest{
 }
 
 func newUserInfoDTO(n string, e string, p string, friends []string) dto.UserInformation {
-	nameE := name.NewName(n)
-	emailE := email.NewEmail(e)
-	pictureE := picture.NewPicture(p)
-	friendsEs := make([]E.Either[error, email.Email], 0)
-	for _, friend := range friends {
-		friendsEs = append(friendsEs, email.NewEmail(friend))
-	}
-	userE := user.NewUserFromEither(nameE, emailE, pictureE, friendsEs)
+	userE := F.Pipe4(
+		E.Right[error](user.NewUser),
+		E.Ap[func(e email.Email) func(picture picture.Picture) func(friends []email.Email) user.User](name.NewName(n)),
+		E.Ap[func(picture picture.Picture) func(friends []email.Email) user.User](email.NewEmail(e)),
+		E.Ap[func(friends []email.Email) user.User](picture.NewPicture(p)),
+		E.Ap[user.User](
+			F.Pipe2(
+				friends,
+				A.Map(email.NewEmail),
+				E.SequenceArray,
+			)),
+	)
 	user, err := E.Unwrap(userE)
 	if err != nil {
 		panic(err)

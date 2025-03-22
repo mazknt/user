@@ -8,8 +8,8 @@ import (
 )
 
 type UserIF interface {
-	GetUserInformation(idE E.Either[error, email.Email]) E.Either[error, user.User]
-	SetUserInformation(userE E.Either[error, user.User]) E.Either[error, user.User]
+	GetUserInformation(id email.Email) E.Either[error, user.User]
+	SetUserInformation(user user.User) E.Either[error, user.User]
 	// UpdateUserInformaiton(userE E.Either[error, user.User]) E.Either[error, user.User]
 	// DeleteUserInformaiton(userE E.Either[error, user.User]) E.Either[error, user.User]
 }
